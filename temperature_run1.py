@@ -212,4 +212,5 @@ def process_full_period(start_year, end_year, area, base_path):
 
 
 # Run the processing for the specific area
+print("\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n\n")
 process_full_period(START_YEAR, END_YEAR, GLOBAL_AREA, BASE_PATH)
