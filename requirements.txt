@@ -1,0 +1,6 @@
+xarray
+dask
+cdsapi
+h5netcdf
+scipy
+numpy
