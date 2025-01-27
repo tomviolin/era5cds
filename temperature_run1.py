@@ -8,18 +8,40 @@ import multiprocessing
 # Parameters
 START_YEAR = 1980
 END_YEAR = 2021
+# Define the specific area
+GLOBAL_AREA = [90, -180, -90, 180]  # [north, west, south, east]
+
+# BASE_PATH specifies the base path where the data is downloaded and processed
+# it defaults to the directory where the Python program is located
+# NOTE:The data is actually currently stored at 
+#    BASE_PATH/processed_data
+# to avoid cluttering the base directory.
 BASE_PATH = os.path.dirname(sys.argv[0])
 
 # multitasking params
+# NUMBER_OF_SLOTS: 
+# SLOTS: the number of tasks to run in parallel
+# MYSLOT: the task slot that THIS task is running in.
+# The value for MYSLOT is passed in on the command line by the
+# startruns.bat batch file.
+# You must ensure that the number of slots assigned in the startruns.bat 
+# matches the number assigned to SLOTS below
+NUMBER_OF_SLOTS=8
+
+# internal working code
+# default is one slot (serial processing)
 SLOTS=1
 MYSLOT=0
+# if a slot number was passed on the command line, then
+# assign the NUMBER_OF_SLOTS value
 if len(sys.argv) > 1:
-    SLOTS=8
+    SLOTS=NUMBER_OF_SLOTS
     MYSLOT=sys.argv[1]
 
+# special case. if a question mark (?) is specified on the
+# command line, a special test mode is invoked.
 if MYSLOT == "?":
     print(f"Number of slots = {SLOTS}")
-    sys.exit()
 
 
 '''
@@ -27,8 +49,6 @@ if MYSLOT == "?":
 client = cdsapi.Client()
 '''
 
-# Define the specific area
-GLOBAL_AREA = [90, -180, -90, 180]  # [north, west, south, east]
 
 def download_hourly_data(year, month, day, area, output_file, max_retries=3):
     """
@@ -136,6 +156,7 @@ def download_and_process_day(task):
     process_daily_mean(hourly_file, daily_mean_file)
 
 def process_full_period(start_year, end_year, area, base_path):
+    global GLOBAL_AREA
     """
     Processes data for the entire period (1980–2021).
     Downloads hourly data, calculates daily means, and deletes hourly files.
@@ -155,20 +176,39 @@ def process_full_period(start_year, end_year, area, base_path):
 
             for day in range(1, days_in_month + 1):
                 task = [year,month,day,area,output_dir,slot_no]
+                # only add the day to the task list
+                # if the day's daily mean file does not exist
                 if not os.path.exists(daily_mean_file_fn(task)):
                     tasks = tasks + [task]
                     slot_no = (slot_no + 1) % SLOTS 
+                    # if we are testing, quit after creating the first task
+                    if MYSLOT=="?":
+                        break
+            # nested loop, so must check for testing mode at each loop level
+            if MYSLOT=="?":
+                break
+        if MYSLOT=="?":
+            break
 
 
-    
+    # initial stab at using the python multiprocessing module. It may work 
+    # now that I moved the creation of the CDS API client such that
+    # a new client object is created for each day separately
+    # instead of reusing the same client object for all days.
     '''with multiprocessing.Pool(processes = SLOTS) as pool:
         results = pool.map(download_and_process_day,tasks)
     '''
 
-    for task in tasks:
-        print(f"====== task: {','.join([str(i) for i in task])} MYSLOT = {MYSLOT} =======")
-        if int(task[-1])  == int(MYSLOT):
-            download_and_process_day(task)
+    #  if we are in test mode, 
+    if MYSLOT=="?":
+        print("===== TESTING CONFIGURATION ON FIRST DAY ONLY IN LIMTED AREA (Milwaukee area) ======")
+        GLOBAL_AREA = [43, -88, 42, -87]  # [north, west, south, east]
+        download_and_process_day(tasks[0])
+    else:
+        for task in tasks:
+            print(f"====== task: {','.join([str(i) for i in task])} MYSLOT = {MYSLOT} =======")
+            if int(task[-1])  == int(MYSLOT):
+                download_and_process_day(task)
 
 
 # Run the processing for the specific area
